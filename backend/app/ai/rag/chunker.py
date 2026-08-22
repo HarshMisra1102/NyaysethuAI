@@ -9,14 +9,13 @@ class TextChunk:
 
 
 class TextChunker:
-
     def __init__(
         self,
         chunk_size: int = 1000,
         overlap: int = 150,
     ):
         if chunk_size <= 0:
-            raise ValueError("chunk_size must be positive.")
+            raise ValueError("chunk_size must be greater than zero.")
 
         if overlap < 0:
             raise ValueError("overlap cannot be negative.")
@@ -43,7 +42,7 @@ class TextChunker:
         chunks: list[TextChunk] = []
 
         start = 0
-        index = 0
+        chunk_index = 0
         text_length = len(text)
 
         while start < text_length:
@@ -53,28 +52,29 @@ class TextChunker:
                 text_length,
             )
 
-            chunk = text[start:end]
+            chunk_text = text[start:end]
 
-            # Avoid breaking words when possible.
+            # Try not to split words.
             if end < text_length:
-                last_space = chunk.rfind(" ")
+
+                last_space = chunk_text.rfind(" ")
 
                 if last_space > self.chunk_size // 2:
                     end = start + last_space
-                    chunk = text[start:end]
+                    chunk_text = text[start:end]
 
-            chunk = chunk.strip()
+            chunk_text = chunk_text.strip()
 
-            if chunk:
+            if chunk_text:
                 chunks.append(
                     TextChunk(
-                        content=chunk,
-                        chunk_index=index,
+                        content=chunk_text,
+                        chunk_index=chunk_index,
                         page_number=page_number,
                     )
                 )
 
-                index += 1
+                chunk_index += 1
 
             if end >= text_length:
                 break
