@@ -1,96 +1,95 @@
-import json
+import re
 from typing import Any
 
-from pydantic import BaseModel, Field
 
+class EntityExtractor:
+    """
+    Lightweight entity extractor for civic/legal queries.
 
-class ExtractedEntities(BaseModel):
-    state: str | None = None
-    district: str | None = None
-    department: str | None = None
-    scheme: str | None = None
-    issue: str | None = None
-    service: str | None = None
-    organization: str | None = None
-    document_type: str | None = None
+    This intentionally extracts high-value entities without
+    making the entire pipeline dependent on an LLM.
+    """
 
-    dates: list[str] = Field(default_factory=list)
-    additional_entities: dict[str, str] = Field(default_factory=dict)
+    MONEY_PATTERN = re.compile(
+        r"(?:₹|rs\.?|inr)\s?"
+        r"[\d,]+(?:\.\d+)?",
+        re.IGNORECASE,
+    )
 
+    PHONE_PATTERN = re.compile(
+        r"\b(?:\+91[-\s]?)?[6-9]\d{9}\b"
+    )
 
-ENTITY_PROMPT = """
-Extract relevant civic/government entities from the citizen's message.
+    PINCODE_PATTERN = re.compile(
+        r"\b[1-9][0-9]{5}\b"
+    )
 
-Extract when present:
+    def extract(
+        self,
+        text: str,
+    ) -> dict[str, Any]:
 
-- state
-- district
-- department
-- scheme
-- issue
-- service
-- organization
-- document_type
-- dates
+        if not text:
+            return {}
 
-Do NOT guess missing information.
+        entities: dict[str, Any] = {}
 
-Do NOT infer a specific department unless explicitly stated.
-
-Return ONLY JSON.
-
-Example:
-
-{
-    "state": "Uttar Pradesh",
-    "district": null,
-    "department": null,
-    "scheme": "PM-KISAN",
-    "issue": "Application rejected",
-    "service": null,
-    "organization": null,
-    "document_type": null,
-    "dates": [],
-    "additional_entities": {}
-}
-"""
-
-
-async def extract_entities(
-    text: str,
-    llm_client: Any,
-) -> ExtractedEntities:
-
-    if not text or not text.strip():
-        raise ValueError("Text cannot be empty.")
-
-    prompt = f"""
-{ENTITY_PROMPT}
-
-Citizen message:
-{text}
-"""
-
-    try:
-        response = await llm_client.generate(
-            prompt=prompt,
-            temperature=0.0,
+        money = self.MONEY_PATTERN.findall(
+            text
         )
 
-        if isinstance(response, dict):
-            data = response
+        if money:
+            entities["amounts"] = money
 
-        else:
-            cleaned = str(response).strip()
+        phone_numbers = self.PHONE_PATTERN.findall(
+            text
+        )
 
-            if cleaned.startswith("```"):
-                cleaned = cleaned.replace("```json", "")
-                cleaned = cleaned.replace("```", "")
-                cleaned = cleaned.strip()
+        if phone_numbers:
+            entities["phone_numbers"] = phone_numbers
 
-            data = json.loads(cleaned)
+        pincodes = self.PINCODE_PATTERN.findall(
+            text
+        )
 
-        return ExtractedEntities.model_validate(data)
+        if pincodes:
+            entities["pincodes"] = pincodes
 
-    except Exception:
-        return ExtractedEntities()
+        entities["keywords"] = self._extract_keywords(
+            text
+        )
+
+        return entities
+
+    @staticmethod
+    def _extract_keywords(
+        text: str,
+    ) -> list[str]:
+
+        keyword_patterns = [
+            "landlord",
+            "tenant",
+            "security deposit",
+            "rent",
+            "consumer",
+            "refund",
+            "salary",
+            "wages",
+            "employer",
+            "rti",
+            "government scheme",
+            "welfare scheme",
+            "notice",
+            "document",
+            "pension",
+            "scholarship",
+            "subsidy",
+        ]
+
+        normalized = text.lower()
+
+        return [
+            keyword
+            for keyword in keyword_patterns
+            if keyword in normalized
+        ]

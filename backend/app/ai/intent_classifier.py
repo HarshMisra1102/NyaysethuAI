@@ -1,102 +1,145 @@
-import json
 from enum import Enum
-from typing import Any
-
-from pydantic import BaseModel, Field
+import re
 
 
 class Intent(str, Enum):
-    RTI = "RTI"
-    RIGHTS = "RIGHTS"
-    SCHEME = "SCHEME"
-    DOCUMENT = "DOCUMENT"
-    GRIEVANCE = "GRIEVANCE"
-    GENERAL_CIVIC = "GENERAL_CIVIC"
+    RIGHTS = "rights"
+    RTI = "rti"
+    SCHEME = "scheme"
+    DOCUMENT = "document"
+    UNKNOWN = "unknown"
 
 
-class IntentResult(BaseModel):
-    intent: Intent
-    domain: str | None = None
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+class IntentClassifier:
+    """
+    Lightweight deterministic intent classifier.
 
+    Rule-based routing is intentionally used before an LLM
+    so that core routing remains reliable even when the LLM
+    is unavailable.
+    """
 
-CLASSIFICATION_PROMPT = """
-Classify the citizen's request into exactly one intent.
+    RTI_KEYWORDS = {
+        "rti",
+        "right to information",
+        "information act",
+        "public authority",
+        "pio",
+        "public information officer",
+        "government records",
+        "government information",
+        "file rti",
+        "submit rti",
+        "rti application",
+    }
 
-Allowed intents:
+    SCHEME_KEYWORDS = {
+        "scheme",
+        "government scheme",
+        "welfare scheme",
+        "subsidy",
+        "benefit",
+        "pension",
+        "scholarship",
+        "eligibility",
+        "eligible",
+        "ration",
+        "financial assistance",
+    }
 
-RTI
-RIGHTS
-SCHEME
-DOCUMENT
-GRIEVANCE
-GENERAL_CIVIC
+    DOCUMENT_KEYWORDS = {
+        "document",
+        "notice",
+        "letter",
+        "order",
+        "circular",
+        "pdf",
+        "form",
+        "document says",
+        "explain this notice",
+        "explain this document",
+        "read this",
+    }
 
-Examples:
+    RIGHTS_KEYWORDS = {
+        "right",
+        "rights",
+        "landlord",
+        "tenant",
+        "rent",
+        "security deposit",
+        "consumer",
+        "refund",
+        "workplace",
+        "employer",
+        "salary",
+        "wages",
+        "harassment",
+        "eviction",
+        "consumer complaint",
+        "consumer dispute",
+    }
 
-"I want information about why my scholarship was rejected."
-RTI
+    def classify(self, text: str) -> Intent:
+        if not text or not text.strip():
+            return Intent.UNKNOWN
 
-"My landlord refuses to return my security deposit."
-RIGHTS
+        normalized = self._normalize(text)
 
-"Am I eligible for PM-KISAN?"
-SCHEME
+        scores = {
+            Intent.RTI: self._score(
+                normalized,
+                self.RTI_KEYWORDS,
+            ),
+            Intent.SCHEME: self._score(
+                normalized,
+                self.SCHEME_KEYWORDS,
+            ),
+            Intent.DOCUMENT: self._score(
+                normalized,
+                self.DOCUMENT_KEYWORDS,
+            ),
+            Intent.RIGHTS: self._score(
+                normalized,
+                self.RIGHTS_KEYWORDS,
+            ),
+        }
 
-"Explain this government notice."
-DOCUMENT
-
-"Where can I complain about this government service?"
-GRIEVANCE
-
-Return ONLY valid JSON:
-
-{
-    "intent": "RIGHTS",
-    "domain": "TENANT",
-    "confidence": 0.95
-}
-"""
-
-
-async def classify_intent(
-    text: str,
-    llm_client: Any,
-) -> IntentResult:
-
-    if not text or not text.strip():
-        raise ValueError("Text cannot be empty.")
-
-    prompt = f"""
-{CLASSIFICATION_PROMPT}
-
-Citizen request:
-{text}
-"""
-
-    try:
-        response = await llm_client.generate(
-            prompt=prompt,
-            temperature=0.0,
+        best_intent = max(
+            scores,
+            key=scores.get,
         )
 
-        if isinstance(response, dict):
-            data = response
-        else:
-            cleaned = str(response).strip()
+        if scores[best_intent] == 0:
+            return Intent.UNKNOWN
 
-            if cleaned.startswith("```"):
-                cleaned = cleaned.replace("```json", "")
-                cleaned = cleaned.replace("```", "")
-                cleaned = cleaned.strip()
+        return best_intent
 
-            data = json.loads(cleaned)
-
-        return IntentResult.model_validate(data)
-
-    except Exception:
-        return IntentResult(
-            intent=Intent.GENERAL_CIVIC,
-            domain=None,
-            confidence=0.0,
+    @staticmethod
+    def _normalize(text: str) -> str:
+        text = text.lower()
+        text = re.sub(
+            r"\s+",
+            " ",
+            text,
         )
+        return text.strip()
+
+    @staticmethod
+    def _score(
+        text: str,
+        keywords: set[str],
+    ) -> int:
+
+        score = 0
+
+        for keyword in keywords:
+
+            if keyword in text:
+                # Multi-word phrases are stronger signals.
+                if " " in keyword:
+                    score += 2
+                else:
+                    score += 1
+
+        return score

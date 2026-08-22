@@ -7,8 +7,6 @@ from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.chat import (
-    ActionStep,
-    ChatAIResponse,
     ChatRequest,
     ChatResponse,
 )
@@ -17,6 +15,8 @@ from app.services.chat_service import (
     get_or_create_conversation,
     save_message,
 )
+from app.services.ai_servies import AIService
+from app.ai.orchestrator import AIOrchestrator
 
 
 router = APIRouter(
@@ -34,6 +34,11 @@ async def process_chat_query(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+
+    # --------------------------------------------------
+    # 1. Validate case
+    # --------------------------------------------------
+
     if data.case_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,10 +57,18 @@ async def process_chat_query(
             detail="Case not found.",
         )
 
+    # --------------------------------------------------
+    # 2. Get or create conversation
+    # --------------------------------------------------
+
     conversation = await get_or_create_conversation(
         db,
         case,
     )
+
+    # --------------------------------------------------
+    # 3. Save user message
+    # --------------------------------------------------
 
     await save_message(
         db,
@@ -64,31 +77,41 @@ async def process_chat_query(
         data.message,
     )
 
-    # AI integration will be added in a later step.
-    ai_response = ChatAIResponse(
-        issue=case.title,
-        category=case.category,
-        summary="AI processing is not connected yet.",
-        possible_rights=[],
-        evidence=[],
-        action_plan=[
-            ActionStep(
-                step=1,
-                title="AI processing pending",
-                description=(
-                    "The AI service will analyze this "
-                    "query after integration."
-                ),
-            )
-        ],
-        required_documents=[],
-        sources=[],
-        disclaimer=(
-            "This system provides informational civic "
-            "and legal guidance and is not a substitute "
-            "for professional legal advice."
-        ),
-    )
+    # --------------------------------------------------
+    # 4. Run AI
+    # --------------------------------------------------
+
+    try:
+
+        ai_service = AIService(
+            orchestrator=AIOrchestrator()
+        )
+
+        ai_response = await ai_service.process_query(
+            request=data,
+            user_id=current_user.id,
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "AI processing failed. "
+                "Please try again."
+            ),
+        ) from exc
+
+    # --------------------------------------------------
+    # 5. Save assistant response
+    # --------------------------------------------------
 
     assistant_message = await save_message(
         db,
@@ -96,6 +119,10 @@ async def process_chat_query(
         "assistant",
         ai_response.summary,
     )
+
+    # --------------------------------------------------
+    # 6. Return final response
+    # --------------------------------------------------
 
     return ChatResponse(
         conversation_id=conversation.id,
