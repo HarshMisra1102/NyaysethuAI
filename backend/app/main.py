@@ -4,6 +4,12 @@ from app.api.auth import router as auth_router
 from app.core.database import get_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.cases import router as cases_router
+from app.api.chat import router as chat_router
+from app.api.documents import router as documents_router
+from app.api.rights import router as rights_router
+from app.api.rti import router as rti_router
+from app.api.schemes import router as schemes_router
 
 
 app = FastAPI(
@@ -15,6 +21,34 @@ app = FastAPI(
 
 app.include_router(
     auth_router,
+    prefix="/api/v1",
+)
+app.include_router(
+    cases_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    chat_router,
+    prefix="/api/v1",
+)
+app.include_router(
+    rti_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    rights_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    schemes_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    documents_router,
     prefix="/api/v1",
 )
 
