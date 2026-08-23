@@ -1,0 +1,1 @@
+export function Footer(){return <footer className="footer"><div className="shell"><strong>NyayaSetu</strong> · Understand Your Rights. Take the Right Step.<br/><span>NyayaSetu provides general informational guidance and is not a substitute for professional legal advice.</span></div></footer>}

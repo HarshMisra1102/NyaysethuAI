@@ -1,0 +1,3 @@
+"use client";
+import Link from "next/link";import {Protected}from "@/components/Protected";
+export default function Documents(){return <Protected><main className="page"><div className="shell"><div className="row"><div><p className="eyebrow">Knowledge documents</p><h1 className="title">Documents</h1></div><Link className="btn" href="/documents/upload">Upload document</Link></div><div className="card empty"><h3>No document library endpoint is currently available</h3><p>The backend supports secure PDF and TXT upload and ingestion, but does not expose an endpoint to list uploaded documents. Upload a document or use a connected case to ask about it.</p></div></div></main></Protected>}

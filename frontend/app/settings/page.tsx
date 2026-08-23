@@ -1,0 +1,3 @@
+"use client";
+import {useEffect,useState}from "react";import {useRouter}from "next/navigation";import {Protected}from "@/components/Protected";import {api}from "@/lib/api";import {auth}from "@/lib/auth";
+export default function Settings(){const router=useRouter();const [online,setOnline]=useState<boolean|null>(null);useEffect(()=>{api.health().then(setOnline).catch(()=>setOnline(false))},[]);return <Protected><main className="page"><div className="shell form card"><p className="eyebrow">Settings</p><h1 className="title">Account settings</h1><p><strong>Backend connection:</strong> {online===null?'Checking…':online?'Connected':'Unavailable'}</p><button className="btn danger" onClick={()=>{auth.clear();router.push('/')}}>Log out</button></div></main></Protected>}

@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.core.database import get_db
@@ -10,12 +11,21 @@ from app.api.documents import router as documents_router
 from app.api.rights import router as rights_router
 from app.api.rti import router as rti_router
 from app.api.schemes import router as schemes_router
+from app.core.config import get_settings
 
 
 app = FastAPI(
     title="NyayaSetu AI API",
     description="AI-powered civic and legal empowerment platform",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

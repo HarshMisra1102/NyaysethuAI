@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Frontend dependencies and build output
+node_modules/
+.next/
+
 # Python
 __pycache__/
 *.py[cod]

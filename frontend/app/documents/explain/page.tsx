@@ -1,0 +1,3 @@
+"use client";
+import Link from "next/link";import {Protected}from "@/components/Protected";
+export default function Explain(){return <Protected><main className="page"><div className="shell form card"><p className="eyebrow">Document understanding</p><h1 className="title">Explain a government document</h1><p className="subtitle">Upload a PDF or TXT document first, then ask a focused question in a case conversation. The current backend does not provide a dedicated document-explanation endpoint.</p><div className="actions"><Link className="btn" href="/documents/upload">Upload document</Link><Link className="btn secondary" href="/chat">Open chat</Link></div></div></main></Protected>}
