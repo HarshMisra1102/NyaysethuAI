@@ -8,6 +8,7 @@ from app.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.models.case import Case
     from app.models.query import Query
+    from app.models.document import Document
 
 
 class User(TimestampMixin, Base):
@@ -53,6 +54,12 @@ class User(TimestampMixin, Base):
 
     queries: Mapped[list["Query"]] = relationship(
         "Query",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    documents: Mapped[list["Document"]] = relationship(
+        "Document",
         back_populates="user",
         cascade="all, delete-orphan",
     )

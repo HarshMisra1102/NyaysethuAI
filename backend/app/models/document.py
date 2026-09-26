@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -8,6 +8,7 @@ from app.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.models.document_chunk import DocumentChunk
     from app.models.source import Source
+    from app.models.user import User
 
 
 class Document(TimestampMixin, Base):
@@ -16,6 +17,14 @@ class Document(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(
         primary_key=True,
         autoincrement=True,
+    )
+
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+
+    processing_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="completed", server_default="completed", index=True
     )
 
     title: Mapped[str] = mapped_column(
@@ -61,4 +70,9 @@ class Document(TimestampMixin, Base):
         "Source",
         back_populates="document",
         cascade="all, delete-orphan",
+    )
+
+    user: Mapped["User | None"] = relationship(
+        "User",
+        back_populates="documents",
     )

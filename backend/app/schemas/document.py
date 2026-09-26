@@ -9,6 +9,7 @@ class DocumentResponse(BaseModel):
     )
 
     id: int
+    processing_status: str
     title: str
     document_type: str | None
     department: str | None
@@ -22,3 +23,10 @@ class DocumentResponse(BaseModel):
 class DocumentUploadResponse(BaseModel):
     document: DocumentResponse
     processing_status: str
+
+
+class DocumentPage(BaseModel):
+    items: list[DocumentResponse]
+    page: int
+    page_size: int
+    total: int

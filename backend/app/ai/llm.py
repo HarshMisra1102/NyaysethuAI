@@ -5,6 +5,10 @@ from google import genai
 from app.core.config import get_settings
 
 
+class AIProviderUnavailableError(RuntimeError):
+    """The configured AI provider cannot serve a generation request."""
+
+
 class GeminiClient:
     """
     Central Gemini generation client for NyayaSetu AI.
@@ -18,6 +22,7 @@ class GeminiClient:
     """
 
     PREFERRED_MODELS = [
+        "gemini-3.8-flash",
         "gemini-3.7-flash",
         "gemini-3.6-flash",
         "gemini-3.5-flash",
@@ -131,13 +136,15 @@ class GeminiClient:
 
         return self.model
 
-    async def _select_fallback_model(
+    async def _select_fallback_models(
         self,
         failed_model: str,
-    ) -> str | None:
+    ) -> list[str]:
         """
-        Select another available model after
-        a temporary generation failure.
+        List alternatives after a temporary generation failure.
+
+        Stable, explicitly preferred models are tried before generic
+        Flash models and preview releases.
         """
 
         available = await self.discover_models()
@@ -148,24 +155,48 @@ class GeminiClient:
             if model != failed_model
         ]
 
-        # Prefer Flash alternatives.
-        flash_candidates = [
+        preferred_candidates = [
             model
-            for model in candidates
-            if "flash" in model.lower()
+            for model in self.PREFERRED_MODELS
+            if model in candidates
         ]
 
-        if flash_candidates:
-            flash_candidates.sort(
-                reverse=True
+        stable_flash_candidates = [
+            model
+            for model in candidates
+            if (
+                "flash" in model.lower()
+                and "preview" not in model.lower()
+                and model not in preferred_candidates
             )
+        ]
 
-            return flash_candidates[0]
+        preview_flash_candidates = [
+            model
+            for model in candidates
+            if "flash" in model.lower() and "preview" in model.lower()
+        ]
 
-        if candidates:
-            return candidates[0]
+        remaining_candidates = [
+            model
+            for model in candidates
+            if (
+                model not in preferred_candidates
+                and model not in stable_flash_candidates
+                and model not in preview_flash_candidates
+            )
+        ]
 
-        return None
+        stable_flash_candidates.sort(reverse=True)
+        preview_flash_candidates.sort()
+        remaining_candidates.sort()
+
+        return (
+            preferred_candidates
+            + stable_flash_candidates
+            + preview_flash_candidates
+            + remaining_candidates
+        )
 
     async def generate(
         self,
@@ -213,52 +244,61 @@ class GeminiClient:
             )
 
             if not temporary_failure:
-                raise
+                raise AIProviderUnavailableError(
+                    "Gemini could not process the request."
+                ) from first_error
 
             print(
                 f"[Gemini] Model {model} "
                 f"is temporarily unavailable."
             )
 
-            fallback_model = (
-                await self._select_fallback_model(
-                    failed_model=model
-                )
+            fallback_models = await self._select_fallback_models(
+                failed_model=model
             )
 
-            if not fallback_model:
-                raise first_error
+            if not fallback_models:
+                raise AIProviderUnavailableError(
+                    "Gemini is temporarily unavailable."
+                ) from first_error
 
-            print(
-                f"[Gemini] Trying fallback model: "
-                f"{fallback_model}"
-            )
+            last_error: Exception = first_error
 
-            # Small delay to avoid immediately hammering
-            # the API again.
-            await asyncio.sleep(1)
-
-            response = (
-                await self.client.aio.models.generate_content(
-                    model=fallback_model,
-                    contents=prompt,
-                    config={
-                        "temperature": temperature,
-                    },
-                )
-            )
-
-            if not response.text:
-                raise RuntimeError(
-                    "Gemini fallback returned "
-                    "an empty response."
+            for fallback_model in fallback_models:
+                print(
+                    f"[Gemini] Trying fallback model: "
+                    f"{fallback_model}"
                 )
 
-            self.model = fallback_model
+                # Small delay to avoid immediately hammering the API again.
+                await asyncio.sleep(1)
 
-            print(
-                f"[Gemini] Successfully switched to: "
-                f"{fallback_model}"
-            )
+                try:
+                    response = (
+                        await self.client.aio.models.generate_content(
+                            model=fallback_model,
+                            contents=prompt,
+                            config={
+                                "temperature": temperature,
+                            },
+                        )
+                    )
+                    if not response.text:
+                        raise RuntimeError("Gemini returned an empty response.")
+                except Exception as fallback_error:
+                    last_error = fallback_error
+                    continue
 
-            return response.text.strip()
+                self.model = fallback_model
+
+                print(
+                    f"[Gemini] Successfully switched to: "
+                    f"{fallback_model}"
+                )
+
+                return response.text.strip()
+
+            raise AIProviderUnavailableError(
+                "Gemini is temporarily unavailable or its quota "
+                "has been exhausted. Please try again later."
+            ) from last_error

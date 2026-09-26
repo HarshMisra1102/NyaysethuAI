@@ -16,6 +16,7 @@ from app.services.chat_service import (
     save_message,
 )
 from app.services.ai_servies import AIService
+from app.ai.llm import AIProviderUnavailableError
 from app.ai.orchestrator import AIOrchestrator
 
 
@@ -91,6 +92,14 @@ async def process_chat_query(
             request=data,
             user_id=current_user.id,
         )
+
+    except AIProviderUnavailableError as exc:
+
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+            headers={"Retry-After": "30"},
+        ) from exc
 
     except ValueError as exc:
 

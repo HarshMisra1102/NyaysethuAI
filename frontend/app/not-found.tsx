@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound(){return <main className="page"><div className="shell form card"><p className="eyebrow">404 · Route not found</p><h1 className="title">This path has no bridge.</h1><p className="subtitle">The page you requested does not exist or may have moved.</p><div className="actions"><Link className="btn" href="/">Return home</Link><Link className="btn secondary" href="/dashboard">Open workspace</Link></div></div></main>}

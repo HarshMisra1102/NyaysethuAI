@@ -1,0 +1,1 @@
+export default function Loading(){return <main className="page"><div className="shell form card" aria-live="polite"><span className="spinner" style={{display:"inline-block"}}/><p className="muted">Preparing your NyayaSetu workspace…</p></div></main>}

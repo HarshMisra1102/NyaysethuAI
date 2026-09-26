@@ -52,6 +52,7 @@ class DocumentDatabaseIngestionService:
         language: str | None = "en",
         source_url: str | None = None,
         storage_url: str | None = None,
+        user_id: int | None = None,
     ) -> Document:
 
         path = Path(file_path)
@@ -79,6 +80,7 @@ class DocumentDatabaseIngestionService:
         # --------------------------------------------------
 
         document = Document(
+            user_id=user_id,
             title=title or path.stem,
             document_type=document_type,
             department=department,
